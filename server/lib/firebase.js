@@ -11,6 +11,29 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const resolvePrivateKey = (value = '') => value.replace(/\\n/g, '\n');
+const normalizeServiceAccount = (serviceAccount = {}) => {
+  if (!serviceAccount || typeof serviceAccount !== 'object') {
+    return serviceAccount;
+  }
+
+  const projectId = serviceAccount.projectId || serviceAccount.project_id;
+  const clientEmail = serviceAccount.clientEmail || serviceAccount.client_email;
+  const privateKey = serviceAccount.privateKey || serviceAccount.private_key;
+
+  return {
+    ...serviceAccount,
+    ...(projectId ? { projectId } : {}),
+    ...(clientEmail ? { clientEmail } : {}),
+    ...(privateKey ? { privateKey: resolvePrivateKey(privateKey) } : {}),
+  };
+};
+const parseServiceAccountJson = (value, sourceLabel) => {
+  try {
+    return normalizeServiceAccount(JSON.parse(value));
+  } catch (error) {
+    throw new Error(`Invalid Firebase service account JSON in ${sourceLabel}: ${error.message}`);
+  }
+};
 
 const loadServiceAccountFromPath = (serviceAccountPath) => {
   if (!serviceAccountPath) return null;
@@ -19,26 +42,39 @@ const loadServiceAccountFromPath = (serviceAccountPath) => {
     ? serviceAccountPath
     : path.resolve(__dirname, '..', serviceAccountPath);
 
-  const fileContent = fs.readFileSync(absolutePath, 'utf8');
-  return JSON.parse(fileContent);
+  try {
+    const fileContent = fs.readFileSync(absolutePath, 'utf8');
+    return parseServiceAccountJson(fileContent, `FIREBASE_SERVICE_ACCOUNT_PATH (${absolutePath})`);
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new Error(
+        `Firebase service account file was not found at ${absolutePath}. On Render, set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY instead of FIREBASE_SERVICE_ACCOUNT_PATH.`
+      );
+    }
+
+    throw error;
+  }
 };
 
 const loadServiceAccount = () => {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-  }
-
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    return loadServiceAccountFromPath(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+    return parseServiceAccountJson(
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
+      'FIREBASE_SERVICE_ACCOUNT_JSON'
+    );
   }
 
   const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env;
   if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
-    return {
+    return normalizeServiceAccount({
       projectId: FIREBASE_PROJECT_ID,
       clientEmail: FIREBASE_CLIENT_EMAIL,
       privateKey: resolvePrivateKey(FIREBASE_PRIVATE_KEY),
-    };
+    });
+  }
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    return loadServiceAccountFromPath(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
   }
 
   return null;

@@ -38,7 +38,11 @@ const getPublicAuthErrorMessage = (error, fallbackMessage) => {
   const details = [error?.message, error?.details].filter(Boolean).join(' ');
 
   if (/Firebase is not configured|Invalid PEM formatted message|private key/i.test(details)) {
-    return 'Firebase is not configured correctly. Add a valid Firebase service account private key in server/.env and restart the server.';
+    return 'Firebase is not configured correctly. Add valid Firebase credentials through environment variables and restart the server.';
+  }
+
+  if (/service account file was not found|ENOENT/i.test(details)) {
+    return 'Firebase credentials file is missing on the deployed server. On Render, set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY instead of FIREBASE_SERVICE_ACCOUNT_PATH.';
   }
 
   if (error?.code === 5 || /5 NOT_FOUND|NOT_FOUND|Requested entity was not found/i.test(details)) {
