@@ -18,16 +18,29 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://intelligent-doubt-resolution-system-delta.vercel.app',
+  'https://intelligent-doubt-resolution-system.vercel.app',
+];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+const CORS_ORIGINS = ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS;
+const CORS_OPTIONS = {
+  origin: CORS_ORIGINS,
+  credentials: true,
+};
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: true,
-  },
+  cors: CORS_OPTIONS,
 });
 
-app.use(cors());
+app.use(cors(CORS_OPTIONS));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
